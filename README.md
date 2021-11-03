@@ -32,7 +32,7 @@ Example:
 
 ## How to require a passkey
 
-Passkeys are to be forward-delcared when declaring classes with functions protected by passkeys.
+Passkeys are to be forward-declared when declaring classes with functions protected by passkeys.
 
 Protected functions do require to receive a nameless, constant reference of the passkey. By convention, it is recommended to put them as the last argument in the arguments list, for instance:
 
@@ -45,3 +45,31 @@ A class requiring access to a function protected by a passkey needs to pass a pa
     BazInstance->FooFunction(0, BazPasskey());
 
 Any attempt to build a passkey by a unallowed class will generate a compilation error.
+
+## Zero-cost implementation
+
+Using passkeys do add a deprecable overhead to performance, as the passkey instance is treated as a regular function argument which needs to be passed on from the caller to the callee through the stack even though it is not going to be used anywhere. When definition and declaration are not in the same file (thus, definition is not inlined) the compiler will fail optimizing as it can't assume all callers will provide the default instance for the passkey. However, with some inline magic you can get rid of this overhead by letting the compiler to optimize the call. Hence, instead of defining the function accepting the passkey in the translation unit, create two versions of the function:
+* One version with the passkey as argument, which may call to the function without the passkey. This function shall be inlined.
+* One version without the passkey, ideally defined in the translation unit file.
+
+For optimized builds, this will end up on a direct call to the private function without the passkey being either instantiated or passed as argument.
+
+Example:
+
+*Header file*
+
+    class Foo
+    {
+    public : bool Bar(const ZuuPasskey&);
+    private: bool Bar();
+    };
+
+    __forceinline bool Foo::Bar(const ZuuPasskey&) { return Bar(); }
+
+*Translation unit*
+
+    bool Foo::Bar()
+    {
+        ... actual implementation goes here ...
+    }
+    
